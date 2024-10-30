@@ -1,0 +1,48 @@
+desc:Tempo Synced Pre-Delay
+
+slider1:2<0,6,1{1/2,1/4,1/8,1/16,1/32,1/64,1/128}>Delay Sync (Beat Division)
+slider2:0<0,1,1{Normal,Triplet}>Note Type (Normal/Triplet)
+
+@init
+// Define the maximum buffer size in samples (1 second, based on the project sample rate)
+max_delay_samples = srate; // One second buffer, based on the current sample rate
+buffer = 0;
+write_pos = 0;
+
+// Create the buffer manually with the calculated size
+buffer = max_delay_samples * 2; // Double the size to store left and right channels
+
+@slider
+// Get rhythmic divisions
+beat_divisions = 2^slider1; // Divisions based on the first slider
+
+@sample
+// Read the project BPM for each sample to maintain synchronization
+bpm = tempo ? tempo : 120; // Default to 120 if not available
+
+// Calculate the multiplier for triplets
+multiplier = slider2 ? (2/3) : 1; // 2/3 for triplet
+
+// Calculate the delay length in samples based on BPM
+delay_time_ms = (60000 / bpm) / beat_divisions * 2 * multiplier; // Delay time in milliseconds (multiplication by 2 and the multiplier)
+delay_samples = min(max_delay_samples, srate * delay_time_ms / 1000); // Convert to samples and limit to buffer size
+
+// Write the input signal to the buffer (left and right channels)
+buffer[write_pos] = spl0;
+buffer[write_pos + max_delay_samples] = spl1;
+
+// Calculate the read position, considering the delay time
+read_pos = write_pos - delay_samples;
+read_pos < 0 ? read_pos += max_delay_samples;
+
+// Read the signal from the buffer
+wet_left = buffer[read_pos];
+wet_right = buffer[read_pos + max_delay_samples];
+
+// Assign the processed signal to the output channels (100% Wet)
+spl0 = wet_left;
+spl1 = wet_right;
+
+// Advance the write position for the next sample
+write_pos += 1;
+write_pos >= max_delay_samples ? write_pos -= max_delay_samples;
