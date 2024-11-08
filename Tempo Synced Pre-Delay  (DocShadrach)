@@ -1,48 +1,51 @@
 desc:Tempo Synced Pre-Delay (DocShadrach)
 
 slider1:2<0,6,1{1/2,1/4,1/8,1/16,1/32,1/64,1/128}>Delay Sync (Beat Division)
-slider2:0<0,1,1{Normal,Triplet}>Note Type (Normal/Triplet)
+slider2:0<0,2,1{Normal,Triplet,Dotted}>Note Type
 
 @init
-// Define the maximum buffer size in samples (1 second, based on the project sample rate)
-max_delay_samples = srate; // One second buffer, based on the current sample rate
-buffer = 0;
+max_delay_samples = srate; // 1-second buffer based on sample rate
 write_pos = 0;
 
-// Create the buffer manually with the calculated size
-buffer = max_delay_samples * 2; // Double the size to store left and right channels
+// Create a single shared buffer for both channels
+buffer = max_delay_samples * 2;
 
 @slider
-// Get rhythmic divisions
-beat_divisions = 2^slider1; // Divisions based on the first slider
+// Calculate time divisions
+beat_divisions = 2^slider1;
+triplet_multiplier = slider2 == 1 ? (2/3) : 1; // Triplet (2/3 multiplier)
+dotted_multiplier = slider2 == 2 ? 1.5 : 1;   // Dotted (1.5 multiplier)
+multiplier = triplet_multiplier * dotted_multiplier;
 
 @sample
-// Read the project BPM for each sample to maintain synchronization
-bpm = tempo ? tempo : 120; // Default to 120 if not available
+bpm = tempo ? tempo : 120; // Default BPM if unavailable
 
-// Calculate the multiplier for triplets
-multiplier = slider2 ? (2/3) : 1; // 2/3 for triplet
+// Calculate delay time in samples
+delay_time_ms = (60000 / bpm) / beat_divisions * 2 * multiplier;
+delay_samples = min(max_delay_samples - 1, srate * delay_time_ms / 1000);
 
-// Calculate the delay length in samples based on BPM
-delay_time_ms = (60000 / bpm) / beat_divisions * 2 * multiplier; // Delay time in milliseconds (multiplication by 2 and the multiplier)
-delay_samples = min(max_delay_samples, srate * delay_time_ms / 1000); // Convert to samples and limit to buffer size
+// Write input signal to the shared buffer for both channels
+buffer[write_pos] = spl0; // Left channel
+buffer[write_pos + max_delay_samples] = spl1; // Right channel
 
-// Write the input signal to the buffer (left and right channels)
-buffer[write_pos] = spl0;
-buffer[write_pos + max_delay_samples] = spl1;
-
-// Calculate the read position, considering the delay time
+// Calculate read position for both channels
 read_pos = write_pos - delay_samples;
 read_pos < 0 ? read_pos += max_delay_samples;
 
-// Read the signal from the buffer
-wet_left = buffer[read_pos];
-wet_right = buffer[read_pos + max_delay_samples];
+// Interpolation for the left channel
+pos_frac = read_pos - floor(read_pos);
+prev_read_pos = floor(read_pos) % max_delay_samples;
+next_read_pos = (prev_read_pos + 1) % max_delay_samples;
 
-// Assign the processed signal to the output channels (100% Wet)
+wet_left = (1 - pos_frac) * buffer[prev_read_pos] + pos_frac * buffer[next_read_pos];
+
+// Interpolation for the right channel
+wet_right = (1 - pos_frac) * buffer[prev_read_pos + max_delay_samples] + pos_frac * buffer[next_read_pos + max_delay_samples];
+
+// Assign the processed delay signal to the output channels
 spl0 = wet_left;
 spl1 = wet_right;
 
 // Advance the write position for the next sample
-write_pos += 1;
-write_pos >= max_delay_samples ? write_pos -= max_delay_samples;
+write_pos = (write_pos + 1) % max_delay_samples;
+
