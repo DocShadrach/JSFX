@@ -20,7 +20,7 @@ multiplier = triplet_multiplier * dotted_multiplier;
 @sample
 bpm = tempo ? tempo : 120; // Default BPM if unavailable
 
-// Calculate delay time in samples
+// Calculate delay time in milliseconds
 delay_time_ms = (60000 / bpm) / beat_divisions * 2 * multiplier;
 delay_samples = min(max_delay_samples - 1, srate * delay_time_ms / 1000);
 
@@ -49,3 +49,9 @@ spl1 = wet_right;
 // Advance the write position for the next sample
 write_pos = (write_pos + 1) % max_delay_samples;
 
+@gfx 200 50
+gfx_r = 1; gfx_g = 1; gfx_b = 1; gfx_a = 1; // White text color
+gfx_clear = 0; // Black background
+
+gfx_x = 10; gfx_y = 10;
+gfx_printf("Delay Time: %.2f ms", delay_time_ms);
